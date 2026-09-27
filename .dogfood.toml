@@ -1,0 +1,31 @@
+# DOGFOOD 2026 — Acceptance harness configuration
+# Run:  python3 ../references/run.py .dogfood.toml > acceptance-report.txt
+
+[portal]
+base_url = "http://localhost:8080"
+
+[tiers]
+claimed = ["T1", "T2"]
+pitch   = "Self-hostable, air-gapped hackathon platform with backend-enforced judging isolation."
+
+# ── Static session tokens ───────────────────────────────────────────────────
+# These are seeded deterministically by backend/prisma/seed.ts.
+# run.py attaches these verbatim as HTTP Cookie headers — do not change them.
+[auth]
+organizer   = "Cookie: session=org_7f2a"
+judge_a     = "Cookie: session=jdg_a_91bc"   # maps to jdg_08 (Marek Nowak)
+judge_b     = "Cookie: session=jdg_b_44de"   # maps to jdg_01 (Tomas Varga)
+participant = "Cookie: session=prt_2e88"
+
+# ── Routes ──────────────────────────────────────────────────────────────────
+# gallery      — T1: public SSR page; must render fixture project titles
+# submit       — T1: POST here as participant; fixture deadline is past → 4xx
+# judge_scores — T2: GET as judge_a → 200; as participant → 401/403
+# peer_scores  — T2: GET as judge_b → 401/403 (backend must enforce)
+# csv_export   — T2: GET as organizer → 200 with comma in first line
+[routes]
+gallery      = "/projects"
+submit       = "/projects/new"
+judge_scores = "/api/judge/scores"
+peer_scores  = "/api/judge/scores?judge=jdg_08"
+csv_export   = "/api/export.csv"

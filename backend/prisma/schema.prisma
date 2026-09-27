@@ -1,0 +1,286 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Prisma Schema — DOGFOOD 2026
+// Models: User, Session, Event, Track, Team, TeamMember, Project, Score
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum Role {
+  VISITOR
+  PARTICIPANT
+  JUDGE
+  ORGANIZER
+  ADMIN
+}
+
+// ── Users & Sessions ──────────────────────────────────────────────────────────
+
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  name         String
+  passwordHash String
+  role         Role    @default(VISITOR)
+  /// fixture judge ID (e.g. "jdg_08") — used to correlate seed data
+  fixtureId    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions         Session[]
+  teamMembers      TeamMember[]
+  scores           Score[]
+  judgeAssignments JudgeAssignment[]
+
+  @@index([fixtureId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  /// Opaque token sent as "Cookie: session=<token>"
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ── Event & Tracks ────────────────────────────────────────────────────────────
+
+model Event {
+  id               String   @id
+  name             String
+  /// deadline from fixtures: "2026-03-01T18:00:00Z" — already in the past
+  submissionsClose DateTime
+
+  createdAt DateTime @default(now())
+
+  tracks            Track[]
+  teams             Team[]
+  rubric            Rubric?
+  judgeAssignments  JudgeAssignment[]
+  normalizationRuns NormalizationRun[]
+
+  @@map("events")
+}
+
+model Track {
+  id      String @id
+  name    String
+  eventId String
+
+  event            Event             @relation(fields: [eventId], references: [id])
+  projects         Project[]
+  judgeAssignments JudgeAssignment[]
+
+  @@map("tracks")
+}
+
+// ── Teams & Members ───────────────────────────────────────────────────────────
+
+model Team {
+  id              String @id
+  name            String
+  /// Generated invite link token — used for join-via-link flow (Module 2)
+  inviteTokenHash String @unique @default(cuid())
+  eventId         String
+
+  event    Event        @relation(fields: [eventId], references: [id])
+  members  TeamMember[]
+  projects Project[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId String
+  userId String
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@map("team_members")
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String   @id
+  title       String
+  summary     String   @db.Text
+  repoUrl     String
+  demoUrl     String?
+  submittedAt DateTime
+  teamId      String
+  trackId     String
+  /// "draft" | "submitted"
+  status      String   @default("submitted")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team             Team               @relation(fields: [teamId], references: [id])
+  track            Track              @relation(fields: [trackId], references: [id])
+  scores           Score[]
+  judgeAssignments JudgeAssignment[]
+  NormalizedResult NormalizedResult[]
+
+  @@map("projects")
+}
+
+// ── Scores ────────────────────────────────────────────────────────────────────
+
+model Score {
+  id           String    @id @default(cuid())
+  assignmentId String    @unique
+  judgeId      String
+  projectId    String
+  rubricId     String
+  comment      String    @default("") @db.Text
+  submittedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignment JudgeAssignment  @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  judge      User             @relation(fields: [judgeId], references: [id])
+  project    Project          @relation(fields: [projectId], references: [id])
+  rubric     Rubric           @relation(fields: [rubricId], references: [id], onDelete: Restrict)
+  criteria   ScoreCriterion[]
+
+  /// One score entry per judge per project
+  @@unique([judgeId, projectId])
+  @@map("scores")
+}
+
+model ScoreCriterion {
+  id          String   @id @default(cuid())
+  scoreId     String
+  criterionId String
+  value       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  score     Score           @relation(fields: [scoreId], references: [id], onDelete: Cascade)
+  criterion RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Restrict)
+
+  @@unique([scoreId, criterionId])
+  @@map("score_criteria")
+}
+
+// ── Rubric & Criteria ─────────────────────────────────────────────────────────
+
+model Rubric {
+  id      String @id @default(cuid())
+  eventId String @unique
+  name    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event             Event              @relation(fields: [eventId], references: [id])
+  criteria          RubricCriterion[]
+  scores            Score[]
+  normalizationRuns NormalizationRun[]
+
+  @@map("rubrics")
+}
+
+model RubricCriterion {
+  id          String  @id @default(cuid())
+  rubricId    String
+  name        String
+  description String?
+  weight      Int
+  order       Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rubric        Rubric           @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  scoreCriteria ScoreCriterion[]
+
+  @@unique([rubricId, name])
+  @@map("rubric_criteria")
+}
+
+// ── Judge Assignments ─────────────────────────────────────────────────────────
+
+model JudgeAssignment {
+  id        String  @id @default(cuid())
+  eventId   String
+  judgeId   String
+  projectId String
+  trackId   String?
+  /// "PENDING", "IN_PROGRESS", "COMPLETED"
+  status    String  @default("PENDING")
+  version   Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event   Event   @relation(fields: [eventId], references: [id])
+  judge   User    @relation(fields: [judgeId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+  track   Track?  @relation(fields: [trackId], references: [id])
+  score   Score?
+
+  @@unique([judgeId, projectId])
+  @@map("judge_assignments")
+}
+
+// ── Normalization & Diagnostics ───────────────────────────────────────────────
+
+model NormalizationRun {
+  id             String    @id @default(cuid())
+  eventId        String
+  rubricId       String
+  rubricSnapshot Json
+  inputSnapshot  Json
+  method         String
+  parameters     Json
+  diagnostics    Json
+  status         String
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  event   Event              @relation(fields: [eventId], references: [id])
+  rubric  Rubric             @relation(fields: [rubricId], references: [id])
+  results NormalizedResult[]
+
+  @@map("normalization_runs")
+}
+
+model NormalizedResult {
+  id                             String  @id @default(cuid())
+  normalizationRunId             String
+  projectId                      String
+  criterionId                    String?
+  rawScore                       Float
+  rawWeightedScore               Float
+  normalizedCriterionScore       Float
+  normalizedWeightedContribution Float
+  finalAggregate                 Float
+  uncertainty                    Float
+  diagnosticFlags                Json
+
+  normalizationRun NormalizationRun @relation(fields: [normalizationRunId], references: [id], onDelete: Cascade)
+  project          Project          @relation(fields: [projectId], references: [id])
+
+  @@unique([normalizationRunId, projectId, criterionId])
+  @@map("normalized_results")
+}

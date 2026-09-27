@@ -1,0 +1,27 @@
+TIER 2 ACCEPTANCE REPORT
+
+1. Tier 2 — 2D-1 Rubric + Judge Assignment
+STATUS: ACCEPTED
+NOTES: Database schema properly linked to events. Validation enforces weights.
+
+2. Tier 2 — 2D-2 Score Submission
+STATUS: ACCEPTED
+NOTES: Draft/Submit lifecycle implemented. Validation ensures proper value boundaries. Immutability correctly guarded in service layer.
+
+3. Tier 2 — 2D-3 Judge / Resource Isolation
+STATUS: ACCEPTED
+NOTES: Strict RBAC and ownership checks implemented via fastify handlers. Judges only see their own assignments.
+
+4. Tier 2 — 2D-4 Live Progress
+STATUS: ACCEPTED
+NOTES: Progress computed via source of truth (JudgeAssignment status) securely on the backend.
+
+5. Tier 2 — 2D-5 Normalization + Diagnostics
+STATUS: ACCEPTED
+NOTES: Normalization math correctly utilizes shrinkage estimators, respects independent sub-graphs, and preserves structural parameters securely.
+
+6. Tier 2 — 2D-6 Final Verification & Blockers
+STATUS: ACCEPTED
+NOTES: Integration blockers addressed. Missing HTTP endpoints for organizer actions (Rubrics, Assignments) implemented. All documentation written reflecting actual implementations. Complete HTTP E2E tests passing.
+
+TIER 2 COMPLETE.
