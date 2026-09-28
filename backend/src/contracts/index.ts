@@ -4,4 +4,6 @@ export * from './auth';
 export * from './teams';
 export * from './projects';
 export * from './errors';
+export * from './voting';
 export * from './judging';
+export * from './voting';

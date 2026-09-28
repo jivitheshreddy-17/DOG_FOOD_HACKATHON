@@ -10,3 +10,7 @@ export * from './judge-assignment-repository.interface';
 export * from './score-repository.interface';
 export * from './transaction-manager.interface';
 export * from './normalization.repository';
+export * from './community-vote-repository.interface';
+export * from './project-comment-repository.interface';
+export * from './verification-token-repository.interface';
+export * from './audit-event-repository.interface';

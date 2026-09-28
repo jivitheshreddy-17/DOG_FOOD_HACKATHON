@@ -14,16 +14,38 @@ import {
   ScoreRepository,
   TransactionManager,
   NormalizationRepository,
+  CommunityVoteRepository,
+  ProjectCommentRepository,
+  VerificationTokenRepository,
+  AuditEventRepository,
 } from '../repositories';
 import { SessionService } from '../../modules/identity/services/session.service';
 import { AuthenticationService } from '../../modules/identity/services/authentication.service';
 import { TeamService } from '../../modules/teams/services/team.service';
 import { TeamResourceAuthorizer } from '../../modules/teams/authorization/team-resource-authorizer';
 import { ProjectService } from '../../modules/projects/services/project.service';
+import { GalleryService } from '../../modules/projects/services/gallery.service';
+import { CommentService } from '../../modules/projects/services/comment.service';
 import { ProjectResourceAuthorizer } from '../../modules/projects/authorization/project-resource-authorizer';
 import { JudgingService } from '../../modules/judging/judging.service';
 import { NormalizationService } from '../../modules/normalization/normalization.service';
 import { NormalizationEngine } from '../domain/normalization/engine';
+import {
+  VotingConfigService,
+  VotingWindowService,
+  VoterIdentityService,
+  BallotService,
+  VotingService,
+  OtpService,
+  DevelopmentEmailDeliveryService,
+  SmtpEmailDeliveryService,
+  MemoryRateLimiter,
+  RedisRateLimiter,
+  RateLimiterService,
+  ResultsService,
+  AuditQueryService,
+} from '../../modules/voting';
+import Redis from 'ioredis';
 
 export interface AppRepositories {
   userRepository: UserRepository;
@@ -37,6 +59,10 @@ export interface AppRepositories {
   judgeAssignmentRepository?: JudgeAssignmentRepository;
   scoreRepository?: ScoreRepository;
   normalizationRepository?: NormalizationRepository;
+  communityVoteRepository?: CommunityVoteRepository;
+  projectCommentRepository?: ProjectCommentRepository;
+  verificationTokenRepository?: VerificationTokenRepository;
+  auditEventRepository?: AuditEventRepository;
 }
 
 export interface AppDependencies {
@@ -52,6 +78,17 @@ export interface AppDependencies {
   projectService: ProjectService;
   judgingService: JudgingService;
   normalizationService: NormalizationService;
+
+  votingConfigService: VotingConfigService;
+  votingWindowService: VotingWindowService;
+  voterIdentityService: VoterIdentityService;
+  ballotService: BallotService;
+  votingService: VotingService;
+  otpService?: any;
+  galleryService: GalleryService;
+  commentService: CommentService;
+  resultsService: ResultsService;
+  auditQueryService?: AuditQueryService;
 }
 
 /**
@@ -131,6 +168,29 @@ export function createPlaceholderRepositories(): AppRepositories {
       findRunById: notImplemented('NormalizationRepository', 'findRunById'),
       findRunsByEvent: notImplemented('NormalizationRepository', 'findRunsByEvent'),
       findResultsByRun: notImplemented('NormalizationRepository', 'findResultsByRun'),
+    },
+    communityVoteRepository: {
+      create: notImplemented('CommunityVoteRepository', 'create'),
+      findByUnique: notImplemented('CommunityVoteRepository', 'findByUnique'),
+      countByVoter: notImplemented('CommunityVoteRepository', 'countByVoter'),
+      countByProject: notImplemented('CommunityVoteRepository', 'countByProject'),
+      listByEvent: notImplemented('CommunityVoteRepository', 'listByEvent'),
+    },
+    projectCommentRepository: {
+      create: notImplemented('ProjectCommentRepository', 'create'),
+      listByProject: notImplemented('ProjectCommentRepository', 'listByProject'),
+      countByProject: notImplemented('ProjectCommentRepository', 'countByProject'),
+    },
+    verificationTokenRepository: {
+      create: notImplemented('VerificationTokenRepository', 'create'),
+      findByTokenHash: notImplemented('VerificationTokenRepository', 'findByTokenHash'),
+      consumeToken: notImplemented('VerificationTokenRepository', 'consumeToken'),
+      deleteByEvent: notImplemented('VerificationTokenRepository', 'deleteByEvent'),
+    },
+    auditEventRepository: {
+      create: notImplemented('AuditEventRepository', 'create'),
+      listByEvent: notImplemented('AuditEventRepository', 'listByEvent'),
+      listBySeverity: notImplemented('AuditEventRepository', 'listBySeverity'),
     },
   };
 }
@@ -239,6 +299,66 @@ export function resolveDependencies(
       engine: normalizationEngine,
     });
 
+  const votingConfigService =
+    overrides?.votingConfigService ??
+    new VotingConfigService({
+      eventRepository: repositories.eventRepository!,
+    });
+
+  const votingWindowService =
+    overrides?.votingWindowService ??
+    new VotingWindowService(clock);
+
+  const voterIdentityService =
+    overrides?.voterIdentityService ??
+    new VoterIdentityService();
+
+  const ballotService =
+    overrides?.ballotService ??
+    new BallotService({
+      eventRepository: repositories.eventRepository!,
+      projectRepository: repositories.projectRepository,
+      teamRepository: repositories.teamRepository,
+      votingWindowService,
+    });
+
+  const rateLimiter =
+    overrides?.otpService?.['rateLimiter'] ??
+    (process.env.REDIS_URL
+      ? new RedisRateLimiter(new Redis(process.env.REDIS_URL))
+      : new MemoryRateLimiter());
+
+  const votingService =
+    overrides?.votingService ??
+    new VotingService({
+      eventRepository: repositories.eventRepository!,
+      projectRepository: repositories.projectRepository,
+      teamRepository: repositories.teamRepository,
+      communityVoteRepository: repositories.communityVoteRepository!,
+      auditEventRepository: repositories.auditEventRepository,
+      transactionManager,
+      votingWindowService,
+      rateLimiter,
+    });
+
+  const emailDeliveryService =
+    overrides?.otpService?.['emailDeliveryService'] ??
+    (process.env.NODE_ENV === 'production'
+      ? new SmtpEmailDeliveryService()
+      : new DevelopmentEmailDeliveryService());
+
+  const otpService =
+    overrides?.otpService ??
+    new OtpService({
+      verificationTokenRepository: repositories.verificationTokenRepository!,
+      eventRepository: repositories.eventRepository!,
+      auditEventRepository: repositories.auditEventRepository,
+      voterIdentityService,
+      emailDeliveryService,
+      clock,
+      rateLimiter,
+    });
+
   return {
     clock,
     repositories,
@@ -252,5 +372,42 @@ export function resolveDependencies(
     projectService,
     judgingService,
     normalizationService,
+    votingConfigService,
+    votingWindowService,
+    voterIdentityService,
+    ballotService,
+    votingService,
+    otpService,
+    galleryService:
+      overrides?.galleryService ??
+      new GalleryService({
+        projectRepository: repositories.projectRepository,
+        teamRepository: repositories.teamRepository,
+      }),
+    commentService:
+      overrides?.commentService ??
+      new CommentService({
+        projectCommentRepository: repositories.projectCommentRepository!,
+        projectRepository: repositories.projectRepository,
+        teamRepository: repositories.teamRepository,
+        auditEventRepository: repositories.auditEventRepository!,
+      }),
+    resultsService:
+      overrides?.resultsService ??
+      new ResultsService({
+        eventRepository: repositories.eventRepository!,
+        projectRepository: repositories.projectRepository,
+        teamRepository: repositories.teamRepository,
+        communityVoteRepository: repositories.communityVoteRepository!,
+        votingWindowService,
+      }),
+    auditQueryService:
+      overrides?.auditQueryService ??
+      (repositories.auditEventRepository
+        ? new AuditQueryService({
+            auditEventRepository: repositories.auditEventRepository,
+            eventRepository: repositories.eventRepository!,
+          })
+        : undefined),
   };
 }

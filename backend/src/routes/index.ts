@@ -6,6 +6,7 @@ import { projectsRoutes } from '../modules/projects';
 import { judgingRoutes } from '../modules/judging';
 import { exportRoutes } from '../modules/export';
 import { normalizationRoutes } from '../modules/normalization/normalization.routes';
+import { votingRoutes } from '../modules/voting';
 
 /**
  * Global route registration plugin.
@@ -19,6 +20,7 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(judgingRoutes);
   await app.register(normalizationRoutes);
   await app.register(exportRoutes);
+  await app.register(votingRoutes);
 }
 
 export * from './health.route';

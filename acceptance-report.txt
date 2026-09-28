@@ -1,4 +1,6 @@
-TIER 2 ACCEPTANCE REPORT
+TIER 1 — COMPLETE
+TIER 2 — COMPLETE / FROZEN
+TIER 3 — COMPLETE / FROZEN
 
 1. Tier 2 — 2D-1 Rubric + Judge Assignment
 STATUS: ACCEPTED
@@ -24,4 +26,49 @@ NOTES: Normalization math correctly utilizes shrinkage estimators, respects inde
 STATUS: ACCEPTED
 NOTES: Integration blockers addressed. Missing HTTP endpoints for organizer actions (Rubrics, Assignments) implemented. All documentation written reflecting actual implementations. Complete HTTP E2E tests passing.
 
-TIER 2 COMPLETE.
+---
+
+TIER 3 ACCEPTANCE REPORT
+
+STATUS: ACCEPTED
+NOTES: 
+- Public/community voting successfully implemented across multiple voting modes (OPEN_LINK, EMAIL_GATED).
+- Voting windows are explicitly bounded and verified.
+- Max votes per voter correctly bound and enforced by database transaction.
+- Duplicate-vote protection enabled.
+- Concurrency protection correctly enforced by database OCC.
+- OTP/email-gated voting implemented using short-lived tokens.
+- Verification-token single use strictly enforced via atomic updates.
+- Comments/gallery properly implemented with validation.
+- Results privacy correctly secured against unauthorized public viewing based on event configuration.
+- Audit API and writer functioning efficiently.
+- Organizer event ownership guarantees strictly enforced across endpoints (F-01).
+- Cross-event isolation maintained robustly.
+- Anti-abuse controls implemented via rate limiting.
+- Redis multi-instance behavior correctly implemented for scaled setups.
+- Memory limiter explicitly bounded as a local fallback.
+- SMTP dependency isolated properly for EMAIL_GATED functionality.
+- TRUST_PROXY deployment requirement documented and defensively configured.
+- OPEN_LINK identity clearly documented as a heuristic.
+- Normalization integration works flawlessly.
+- Rollback guarantees effectively shield against partial failures.
+- Judge concurrency effectively prevented.
+
+Intentional limitations documented:
+1. OPEN_LINK is an anti-abuse identity heuristic, NOT proof of one-human-one-vote.
+2. EMAIL_GATED requires operational SMTP.
+3. Shared multi-instance rate limiting requires Redis.
+4. Memory rate limiting is process-local.
+5. TRUST_PROXY must only be enabled behind a trusted reverse proxy.
+6. Normalization assumptions/limitations remain explicit.
+
+EVIDENCE:
+- F-01 cross-event authorization: proven
+- 57/57 after F-01
+- 60/60 after P1 integrity
+- 63/63 final regression
+- build passed
+- tsc passed
+- Prisma validate passed
+- focused security/integrity tests passed
+- no known blockers

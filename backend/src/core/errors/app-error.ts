@@ -73,3 +73,51 @@ export class SubmissionDeadlinePassedError extends AppError {
     super(ERROR_CODES.SUBMISSION_DEADLINE_PASSED, 400, message, details);
   }
 }
+
+export class InvalidVotingModeError extends AppError {
+  constructor(message = 'Invalid voting mode', details?: unknown) {
+    super(ERROR_CODES.INVALID_VOTING_MODE, 400, message, details);
+  }
+}
+
+export class VotingNotOpenError extends AppError {
+  constructor(message = 'Voting is not open', details?: unknown) {
+    super(ERROR_CODES.VOTING_NOT_OPEN, 403, message, details);
+  }
+}
+
+export class VotingClosedError extends AppError {
+  constructor(message = 'Voting is closed', details?: unknown) {
+    super(ERROR_CODES.VOTING_CLOSED, 403, message, details);
+  }
+}
+
+export class DuplicateVoteError extends AppError {
+  constructor(message = 'Duplicate vote', details?: unknown) {
+    super(ERROR_CODES.DUPLICATE_VOTE, 409, message, details);
+  }
+}
+
+export class VoteLimitExceededError extends AppError {
+  constructor(message = 'Vote limit exceeded', details?: unknown) {
+    super(ERROR_CODES.VOTE_LIMIT_EXCEEDED, 403, message, details);
+  }
+}
+
+export class InvalidOtpError extends AppError {
+  constructor(message = 'Invalid OTP or verification token', details?: unknown) {
+    super(ERROR_CODES.INVALID_OTP, 400, message, details);
+  }
+}
+
+export class OtpExpiredError extends AppError {
+  constructor(message = 'OTP or verification token has expired', details?: unknown) {
+    super(ERROR_CODES.OTP_EXPIRED, 400, message, details);
+  }
+}
+
+export class OtpUsedError extends AppError {
+  constructor(message = 'OTP or verification token has already been used', details?: unknown) {
+    super(ERROR_CODES.OTP_USED, 400, message, details);
+  }
+}

@@ -1,8 +1,14 @@
 import { FastifyInstance } from 'fastify';
-import { requireAuth, requirePermission } from '../../core/authorization';
+import { requireAuth, requirePermission, requireEventOwnership } from '../../core/authorization';
 import { PERMISSIONS } from '@hackathon/contracts';
-import { ERROR_CODES, ForbiddenError } from '../../core/errors';
+import { ERROR_CODES, ForbiddenError, NotFoundError } from '../../core/errors';
 import { prisma } from '../../infrastructure/database/prisma.client';
+import { z } from 'zod';
+import { validateRequest } from '../../core/validation';
+
+const exportQuerySchema = z.object({
+  eventId: z.string().min(1)
+});
 
 export async function exportRoutes(app: FastifyInstance) {
   app.get(
@@ -10,14 +16,20 @@ export async function exportRoutes(app: FastifyInstance) {
     {
       preHandler: [
         requireAuth(),
-        requirePermission(PERMISSIONS.EVENT_MANAGE), // Only Organizers and Admins have EVENT_MANAGE
+        requirePermission(PERMISSIONS.EVENT_MANAGE),
+        validateRequest({ query: exportQuerySchema }),
+        requireEventOwnership((req) => (req.query as any).eventId, app.dependencies.repositories.eventRepository!),
       ],
     },
     async (request, reply) => {
-      // In Tier 2, if no specific eventId is passed, maybe export all events they are authorized for.
-      // Since Organizers currently have global access, export everything completed.
+      const eventId = (request.query as any).eventId;
       const scores = await prisma.score.findMany({
-        where: { assignment: { status: 'COMPLETED' } },
+        where: { 
+          assignment: { 
+            status: 'COMPLETED',
+            eventId: eventId
+          } 
+        },
         include: {
           assignment: { include: { event: true, track: true } },
           judge: true,
@@ -46,6 +58,12 @@ export async function exportRoutes(app: FastifyInstance) {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership(async (req) => {
+          const runId = (req.params as any).runId;
+          const run = await prisma.normalizationRun.findUnique({ where: { id: runId } });
+          if (!run) throw new NotFoundError('Run not found');
+          return run.eventId;
+        }, app.dependencies.repositories.eventRepository!),
       ],
     },
     async (request, reply) => {

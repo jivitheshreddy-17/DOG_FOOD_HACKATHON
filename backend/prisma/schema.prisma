@@ -22,6 +22,19 @@ enum Role {
   ADMIN
 }
 
+enum VotingMode {
+  DISABLED
+  OPEN_LINK
+  EMAIL_GATED
+  AUTHENTICATED
+}
+
+enum AuditSeverity {
+  INFO
+  WARNING
+  SECURITY_ALERT
+}
+
 // ── Users & Sessions ──────────────────────────────────────────────────────────
 
 model User {
@@ -40,6 +53,9 @@ model User {
   teamMembers      TeamMember[]
   scores           Score[]
   judgeAssignments JudgeAssignment[]
+  communityVotes   CommunityVote[]
+  projectComments  ProjectComment[]
+  managedEvents    Event[]
 
   @@index([fixtureId])
   @@map("users")
@@ -69,11 +85,24 @@ model Event {
 
   createdAt DateTime @default(now())
 
+  /// Tier 3 voting configuration
+  votingMode         VotingMode  @default(AUTHENTICATED)
+  votingStartsAt     DateTime?
+  votingEndsAt       DateTime?
+  isResultsPublished Boolean     @default(false)
+  maxVotesPerVoter   Int         @default(1)
+
   tracks            Track[]
   teams             Team[]
   rubric            Rubric?
   judgeAssignments  JudgeAssignment[]
   normalizationRuns NormalizationRun[]
+  communityVotes     CommunityVote[]
+  verificationTokens VerificationToken[]
+  auditEvents        AuditEvent[]
+
+  organizerId        String?
+  organizer          User?       @relation(fields: [organizerId], references: [id])
 
   @@map("events")
 }
@@ -139,6 +168,8 @@ model Project {
   scores           Score[]
   judgeAssignments JudgeAssignment[]
   NormalizedResult NormalizedResult[]
+  communityVotes   CommunityVote[]
+  projectComments  ProjectComment[]
 
   @@map("projects")
 }
@@ -284,3 +315,73 @@ model NormalizedResult {
   @@unique([normalizationRunId, projectId, criterionId])
   @@map("normalized_results")
 }
+
+// ── Tier 3 Community Voting & Audit Subsystem ─────────────────────────────────
+
+model CommunityVote {
+  id            String     @id @default(cuid())
+  eventId       String
+  projectId     String
+  voterIdentity String     /// Hashed IP+UA (OPEN_LINK), Verified Email (EMAIL_GATED), or User ID (AUTHENTICATED)
+  voterType     VotingMode
+  userId        String?    /// Nullable link if voter was authenticated
+  points        Int        @default(1)
+  createdAt     DateTime   @default(now())
+
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, voterIdentity, projectId])
+  @@index([eventId, projectId])
+  @@index([voterIdentity])
+  @@map("community_votes")
+}
+
+model ProjectComment {
+  id         String   @id @default(cuid())
+  projectId  String
+  authorId   String?  /// Optional link to User
+  authorName String   /// Display name or anonymous voter identifier
+  content    String   @db.Text
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@map("project_comments")
+}
+
+model VerificationToken {
+  id        String    @id @default(cuid())
+  email     String
+  tokenHash String    @unique
+  eventId   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([email, eventId])
+  @@map("verification_tokens")
+}
+
+model AuditEvent {
+  id        String        @id @default(cuid())
+  eventId   String?
+  action    String
+  severity  AuditSeverity @default(INFO)
+  actor     String
+  details   Json
+  createdAt DateTime      @default(now())
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([severity, createdAt])
+  @@map("audit_events")
+}
+

@@ -9,9 +9,11 @@ import {
   assignJudgeRequestSchema,
   AssignJudgeRequest
 } from '@hackathon/contracts';
-import { requireAuth, requirePermission } from '../../core/authorization';
+import { requireAuth, requirePermission, requireEventOwnership } from '../../core/authorization';
 import { validateRequest } from '../../core/validation';
 import { successResponse } from '../../core/responses';
+import { prisma } from '../../infrastructure/database/prisma.client';
+import { NotFoundError, ForbiddenError } from '../../core/errors';
 
 const assignmentParamsSchema = z.object({ assignmentId: z.string().min(1) });
 const rubricParamsSchema = z.object({ rubricId: z.string().min(1) });
@@ -137,6 +139,7 @@ export async function judgingRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership((req) => (req.body as any).eventId, app.dependencies.repositories.eventRepository!),
         validateRequest({ body: createRubricRequestSchema }),
       ],
     },
@@ -182,6 +185,14 @@ export async function judgingRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership(async (req) => {
+          const rubricId = (req.params as any).rubricId;
+          const bodyEventId = (req.body as any).eventId;
+          const rubric = await prisma.rubric.findUnique({ where: { id: rubricId } });
+          if (!rubric) throw new NotFoundError('Rubric not found');
+          if (bodyEventId && rubric.eventId !== bodyEventId) throw new ForbiddenError('Event ID mismatch');
+          return rubric.eventId;
+        }, app.dependencies.repositories.eventRepository!),
         validateRequest({ params: rubricParamsSchema, body: createRubricRequestSchema }),
       ],
     },
@@ -204,6 +215,14 @@ export async function judgingRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership(async (req) => {
+          const bodyEventId = (req.body as any).eventId;
+          const projectId = (req.body as any).projectId;
+          const project = await prisma.project.findUnique({ where: { id: projectId }, include: { team: true } });
+          if (!project) throw new NotFoundError('Project not found');
+          if (bodyEventId && project.team.eventId !== bodyEventId) throw new ForbiddenError('Event ID mismatch');
+          return project.team.eventId;
+        }, app.dependencies.repositories.eventRepository!),
         validateRequest({ body: assignJudgeRequestSchema }),
       ],
     },
@@ -225,6 +244,12 @@ export async function judgingRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.JUDGE_VIEW),
+        requireEventOwnership(async (req) => {
+          const assignmentId = (req.params as any).assignmentId;
+          const assignment = await prisma.judgeAssignment.findUnique({ where: { id: assignmentId } });
+          if (!assignment) throw new NotFoundError('Assignment not found');
+          return assignment.eventId;
+        }, app.dependencies.repositories.eventRepository!),
         validateRequest({ params: assignmentParamsSchema }),
       ],
     },

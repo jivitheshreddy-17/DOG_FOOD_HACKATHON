@@ -89,40 +89,43 @@ export class JudgingService {
       }
     }
 
-    // ── 6. Persist (atomic upsert inside transaction) ──────────────────────────
+    // ── 6 & 7. Persist and OCC within a transaction ──────────────────────────
     const submittedAt = request.status === 'SUBMITTED' ? new Date() : null;
 
-    const scoreResult = await scoreRepository.upsert({
-      assignmentId,
-      judgeId,
-      projectId: assignment.projectId,
-      rubricId: rubric.id,
-      criteria: request.scores,
-      comment: request.comment ?? '',
-      submittedAt,
-    });
+    return this.deps.transactionManager.run(async (repos) => {
+      const scoreRepo = repos.scoreRepository ?? scoreRepository;
+      const assignmentRepo = repos.judgeAssignmentRepository ?? judgeAssignmentRepository;
 
-    // ── 7. Transition assignment status via OCC ────────────────────────────────
-    if (request.status === 'SUBMITTED') {
-      const currentVersion = assignment.version ?? 1;
-      const updated = await judgeAssignmentRepository.updateStatusWithOcc(
+      const scoreResult = await scoreRepo.upsert({
         assignmentId,
-        currentVersion,
-        'COMPLETED'
-      );
-      if (!updated) {
-        throw new ConflictError(
-          'Concurrent modification detected — please reload and try again'
-        );
-      }
-    } else {
-      // Draft save — advance to IN_PROGRESS if still PENDING
-      if (assignment.status === 'PENDING') {
-        await judgeAssignmentRepository.updateStatus(assignmentId, 'IN_PROGRESS');
-      }
-    }
+        judgeId,
+        projectId: assignment.projectId,
+        rubricId: rubric.id,
+        criteria: request.scores,
+        comment: request.comment ?? '',
+        submittedAt,
+      });
 
-    return scoreResult;
+      if (request.status === 'SUBMITTED') {
+        const currentVersion = assignment.version ?? 1;
+        const updated = await assignmentRepo.updateStatusWithOcc(
+          assignmentId,
+          currentVersion,
+          'COMPLETED'
+        );
+        if (!updated) {
+          throw new ConflictError(
+            'Concurrent modification detected — please reload and try again'
+          );
+        }
+      } else {
+        if (assignment.status === 'PENDING') {
+          await assignmentRepo.updateStatus(assignmentId, 'IN_PROGRESS');
+        }
+      }
+
+      return scoreResult;
+    });
   }
 
   /**

@@ -42,19 +42,20 @@ async function run() {
     if (unauthAssignments.statusCode === 401) pass('Unauthenticated GET assignments → 401');
     else fail('Unauth GET assignments', `HTTP ${unauthAssignments.statusCode}`);
 
-    const unauthExport = await app.inject({ method: 'GET', url: '/api/export.csv' });
+    const asgnA = await prisma.judgeAssignment.findFirst({ where: { judge: { fixtureId: 'jdg_08' } }});
+    const asgnB = await prisma.judgeAssignment.findFirst({ where: { judge: { fixtureId: 'jdg_01' } }});
+    if (!asgnA || !asgnB) {
+      fail('Seed check', 'Assignments missing');
+      return;
+    }
+
+    const unauthExport = await app.inject({ method: 'GET', url: `/api/export.csv?eventId=${asgnA.eventId}` });
     if (unauthExport.statusCode === 401) pass('Unauthenticated export → 401');
     else fail('Unauth export', `HTTP ${unauthExport.statusCode}`);
 
 
     section('JUDGE TESTS');
-    const asgnA = await prisma.judgeAssignment.findFirst({ where: { judge: { fixtureId: 'jdg_08' } }});
-    const asgnB = await prisma.judgeAssignment.findFirst({ where: { judge: { fixtureId: 'jdg_01' } }});
 
-    if (!asgnA || !asgnB) {
-      fail('Seed check', 'Assignments missing');
-      return;
-    }
 
     const jA = await app.inject({ method: 'GET', url: `/api/judge/assignments/${asgnA.id}/scores`, headers: { cookie: 'session=jdg_a_91bc' } });
     if (jA.statusCode === 200 || jA.statusCode === 404) pass('Judge A own score → 200/404');
@@ -87,7 +88,7 @@ async function run() {
     if (pAsgn.statusCode === 403) pass('Participant GET assignments → 403');
     else fail('Participant assignments', `HTTP ${pAsgn.statusCode}`);
 
-    const pExp = await app.inject({ method: 'GET', url: '/api/export.csv', headers: { cookie: 'session=prt_2e88' } });
+    const pExp = await app.inject({ method: 'GET', url: `/api/export.csv?eventId=${asgnA.eventId}`, headers: { cookie: 'session=prt_2e88' } });
     if (pExp.statusCode === 403) pass('Participant export → 403');
     else fail('Participant export', `HTTP ${pExp.statusCode}`);
 
@@ -101,7 +102,7 @@ async function run() {
     if (oAsgn.statusCode === 200) pass('Organizer authorized assignments → 200');
     else fail('Organizer assignments', `HTTP ${oAsgn.statusCode}`);
 
-    const oExp = await app.inject({ method: 'GET', url: '/api/export.csv', headers: { cookie: 'session=org_7f2a' } });
+    const oExp = await app.inject({ method: 'GET', url: `/api/export.csv?eventId=${asgnA.eventId}`, headers: { cookie: 'session=org_7f2a' } });
     if (oExp.statusCode === 200) {
       if (oExp.headers['content-type'] === 'text/csv') pass('Export has Content-Type text/csv');
       else fail('Export content-type', oExp.headers['content-type'] as string);

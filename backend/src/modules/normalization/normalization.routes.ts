@@ -1,7 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requirePermission } from '../../core/authorization';
+import { requireAuth, requirePermission, requireEventOwnership } from '../../core/authorization';
 import { validateRequest } from '../../core/validation';
+import { prisma } from '../../infrastructure/database/prisma.client';
+import { NotFoundError } from '../../core/errors';
 import { successResponse } from '../../core/responses';
 import { PERMISSIONS } from '@hackathon/contracts';
 
@@ -25,6 +27,7 @@ export async function normalizationRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership((req) => (req.body as any).eventId, app.dependencies.repositories.eventRepository!),
         validateRequest({ body: triggerNormalizationSchema }),
       ],
     },
@@ -44,6 +47,7 @@ export async function normalizationRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership((req) => (req.params as any).eventId, app.dependencies.repositories.eventRepository!),
         validateRequest({ params: eventParamsSchema }),
       ],
     },
@@ -62,6 +66,12 @@ export async function normalizationRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [
         requireAuth(),
         requirePermission(PERMISSIONS.EVENT_MANAGE),
+        requireEventOwnership(async (req) => {
+          const runId = (req.params as any).runId;
+          const run = await prisma.normalizationRun.findUnique({ where: { id: runId } });
+          if (!run) throw new NotFoundError('Run not found');
+          return run.eventId;
+        }, app.dependencies.repositories.eventRepository!),
         validateRequest({ params: runParamsSchema }),
       ],
     },

@@ -121,6 +121,29 @@ async function upsertSession(token: string, userId: string) {
 async function main() {
   const f = loadFixtures();
 
+  // ── 0. Special accounts (organizer + test participant) ─────────────────────
+  const organizer = await prisma.user.upsert({
+    where:  { email: "organizer@dogfood.local" },
+    create: {
+      email:        "organizer@dogfood.local",
+      name:         "Organizer",
+      passwordHash: "seed-placeholder",
+      role:         Role.ORGANIZER,
+    },
+    update: {},
+  });
+
+  const participant = await prisma.user.upsert({
+    where:  { email: "participant@dogfood.local" },
+    create: {
+      email:        "participant@dogfood.local",
+      name:         "Participant",
+      passwordHash: "seed-placeholder",
+      role:         Role.PARTICIPANT,
+    },
+    update: {},
+  });
+
   // ── 1. Event ───────────────────────────────────────────────────────────────
   await prisma.event.upsert({
     where:  { id: f.event.id },
@@ -128,10 +151,12 @@ async function main() {
       id:               f.event.id,
       name:             f.event.name,
       submissionsClose: new Date(f.event.submissions_close),
+      organizerId:      organizer.id,
     },
     update: {
       name:             f.event.name,
       submissionsClose: new Date(f.event.submissions_close),
+      organizerId:      organizer.id,
     },
   });
   console.log(`[seed] event   → ${f.event.id} "${f.event.name}"`);
@@ -335,29 +360,6 @@ async function main() {
   }
   console.log(`[seed] assigns → ${assignmentCount} records`);
   console.log(`[seed] scores  → ${scoreCount} records (${criterionScoreCount} criteria)`);
-
-  // ── 8. Special accounts (organizer + test participant) ─────────────────────
-  const organizer = await prisma.user.upsert({
-    where:  { email: "organizer@dogfood.local" },
-    create: {
-      email:        "organizer@dogfood.local",
-      name:         "Organizer",
-      passwordHash: "seed-placeholder",
-      role:         Role.ORGANIZER,
-    },
-    update: {},
-  });
-
-  const participant = await prisma.user.upsert({
-    where:  { email: "participant@dogfood.local" },
-    create: {
-      email:        "participant@dogfood.local",
-      name:         "Participant",
-      passwordHash: "seed-placeholder",
-      role:         Role.PARTICIPANT,
-    },
-    update: {},
-  });
 
   // ── 9. Static sessions (frozen by .dogfood.toml contract) ─────────────────
   const judgeAUserId = judgeUserMap[JUDGE_A_FIXTURE_ID];

@@ -1,7 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { AuthenticatedRole, Permission } from '@hackathon/contracts';
-import { UnauthorizedError, ForbiddenError } from '../errors';
+import { AuthenticatedRole, Permission, ROLES } from '@hackathon/contracts';
+import { UnauthorizedError, ForbiddenError, NotFoundError } from '../errors';
 import { hasPermission, hasAnyPermission } from './policy';
+import { EventRepository } from '../repositories/event-repository.interface';
 
 export type AuthorizationGuard = (
   request: FastifyRequest,
@@ -99,6 +100,50 @@ export function requireAnyPermission(...permissions: Permission[]): Authorizatio
 
     if (!hasAnyPermission(request.auth.role, permissions)) {
       throw new ForbiddenError('You do not have permission to perform this action');
+    }
+  };
+}
+
+/**
+ * Asserts that the requested event is explicitly owned by the authenticated ORGANIZER.
+ * 
+ * Rules:
+ * 1. Requires authentication.
+ * 2. Fetches the event to verify it exists.
+ * 3. If ADMIN, bypasses ownership check.
+ * 4. If ORGANIZER, checks if event.organizerId === request.auth.id.
+ * 5. Other roles are not checked (they are assumed blocked by standard RBAC unless explicitly allowed).
+ */
+export function requireEventOwnership(
+  getEventId: (req: FastifyRequest) => string | Promise<string>,
+  eventRepository: EventRepository
+): AuthorizationGuard {
+  return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
+    if (request.authError) {
+      throw request.authError;
+    }
+
+    if (!request.auth) {
+      throw new UnauthorizedError('Authentication required');
+    }
+
+    const eventId = await getEventId(request);
+    const event = await eventRepository.findById(eventId);
+    if (!event) {
+      // Don't leak event existence if not authorized; we use 404 since it's standard 
+      // when the event is requested but not found or they can't access it.
+      // Or throw 403. Based on requirements, use project conventions. 
+      throw new NotFoundError('Event not found');
+    }
+
+    if (request.auth.role === ROLES.ADMIN) {
+      return; // Admin bypass
+    }
+
+    if (request.auth.role === ROLES.ORGANIZER) {
+      if (event.organizerId !== request.auth.id) {
+        throw new ForbiddenError('You do not have permission to perform this action');
+      }
     }
   };
 }

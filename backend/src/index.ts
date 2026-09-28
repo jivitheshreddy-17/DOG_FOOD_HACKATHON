@@ -36,6 +36,10 @@ import { PrismaRubricRepository } from "./infrastructure/database/repositories/p
 import { PrismaJudgeAssignmentRepository } from "./infrastructure/database/repositories/prisma-judge-assignment.repository";
 import { PrismaScoreRepository } from "./infrastructure/database/repositories/prisma-score.repository";
 import { PrismaNormalizationRepository } from "./infrastructure/database/repositories/prisma-normalization.repository";
+import { PrismaCommunityVoteRepository } from "./infrastructure/database/repositories/prisma-community-vote.repository";
+import { PrismaProjectCommentRepository } from "./infrastructure/database/repositories/prisma-project-comment.repository";
+import { PrismaVerificationTokenRepository } from "./infrastructure/database/repositories/prisma-verification-token.repository";
+import { PrismaAuditEventRepository } from "./infrastructure/database/repositories/prisma-audit-event.repository";
 import { PrismaTransactionManager } from "./infrastructure/database/prisma.transaction";
 
 // ── Server factory (exported for testing) ─────────────────────────────────────
@@ -54,6 +58,10 @@ export async function buildServer(): Promise<FastifyInstance> {
         judgeAssignmentRepository: new PrismaJudgeAssignmentRepository(prisma),
         scoreRepository: new PrismaScoreRepository(prisma),
         normalizationRepository: new PrismaNormalizationRepository(prisma),
+        communityVoteRepository: new PrismaCommunityVoteRepository(prisma),
+        projectCommentRepository: new PrismaProjectCommentRepository(prisma),
+        verificationTokenRepository: new PrismaVerificationTokenRepository(prisma),
+        auditEventRepository: new PrismaAuditEventRepository(prisma),
       },
       transactionManager: new PrismaTransactionManager(prisma),
     },
@@ -65,7 +73,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             ? { target: "pino-pretty" }
             : undefined,
       },
-      trustProxy: true,
+      trustProxy: process.env.TRUST_PROXY === 'true' ? true : (process.env.TRUST_PROXY || false),
     },
   });
 

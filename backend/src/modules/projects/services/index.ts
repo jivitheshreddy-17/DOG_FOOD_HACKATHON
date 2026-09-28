@@ -31,3 +31,5 @@ export interface ProjectServiceContract {
 }
 
 export const PROJECTS_SERVICES_LOCATION = 'projects/services';
+export * from './gallery.service';
+export * from './comment.service';

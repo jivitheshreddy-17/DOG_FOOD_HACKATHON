@@ -6,6 +6,12 @@ export interface EventRecord {
   id: string;
   name?: string;
   submissionDeadline?: Date | null;
+  votingMode?: 'DISABLED' | 'OPEN_LINK' | 'EMAIL_GATED' | 'AUTHENTICATED';
+  votingStartsAt?: Date | null;
+  votingEndsAt?: Date | null;
+  isResultsPublished?: boolean;
+  maxVotesPerVoter?: number;
+  organizerId?: string | null;
   createdAt?: Date;
 }
 
@@ -15,4 +21,5 @@ export interface EventRecord {
  */
 export interface EventRepository {
   findById(id: string): Promise<EventRecord | null>;
+  updateVotingConfig?(id: string, updates: Partial<EventRecord>): Promise<EventRecord>;
 }
